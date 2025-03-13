@@ -4,6 +4,7 @@ const UserModule = require("../models/User.module");
 const roles = require("../utils/user_roles");
 const post_visibility = require("../utils/post_visibility");
 
+
 const addPost = async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -12,12 +13,14 @@ const addPost = async (req, res) => {
 
     try {
         const data = req.body;
-        
-        const post = new Post({
-            user_id: req.user._id, 
-           ...data,
-        });
 
+        const post = new Post({
+            ...data, 
+            user_id: req.user._id,  
+            visibility: post_visibility.public, 
+        });
+        console.log("req.user._id", req.user._id);
+        console.log("post", post);
         await post.save();
         res.status(201).json({ message: "Post created successfully!", post });
     } catch (error) {
@@ -94,7 +97,6 @@ const deletePost = async (req, res) => {
     }
 };
 
-
 const updatePost = async (req, res) => {
     try {
         const post = await Post.findById(req.params.id);
@@ -103,14 +105,25 @@ const updatePost = async (req, res) => {
             return res.status(404).json({ message: "Post not found" });
         }
 
-        if(req.user.role !== roles.ADMIN){
-       
-            if (post.user_id.toString() !== req.user.id) {
+        if (req.user.role !== roles.ADMIN) {
+            if (post.user_id.toString() !== req.user._id.toString()) {
                 return res.status(403).json({ message: "You are not authorized to update this post" });
             }
         }
 
-        const updatedPost = await Post.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        // Extract the update data from request body and remove restricted fields
+        let { user_id, visibility, ...updateData } = req.body;
+
+        // Ensure user_id and visibility cannot be changed
+        updateData.user_id = post.user_id; // Keep original user_id
+        updateData.visibility = post_visibility.public; // Enforce visibility as public
+
+        // Update the post
+        const updatedPost = await Post.findByIdAndUpdate(
+            req.params.id,
+            updateData,
+            { new: true }
+        );
 
         res.status(200).json({ message: "Post updated successfully!", updatedPost });
     } catch (error) {
